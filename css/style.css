@@ -1,0 +1,21 @@
+.tweetcontent {
+	background-color: #55acee;
+	display: inline-block;
+    border-radius: 2px;
+    padding: 3px;
+}
+
+.tweet-dash {
+	float: left;
+	display: flex;
+	font-size: 54px;
+	width: auto;
+	height: initial;
+	margin: 0 15px 0 5px;
+}
+
+.tweet-text {
+	float: left;
+	padding-left: 10px;
+    color: whitesmoke;
+}
