@@ -1,15 +1,75 @@
 <?php
 //creamos la clase con el nombre del archivo
 class eztweet_plugin{
-	
+
+    private $status;
+    private $imageurl;
 	//en el constructor es donde llamamos a las acciones que vayamos creando
 	public function __construct() {
-		add_action('admin_menu',array($this,"add_option_menu"));
+        ini_set('display_errors', 1);
+        ini_set('display_startup_errors', 1);
+        error_reporting(E_ALL);
+
+        require_once 'inc/TwitterAPIExchange.php';
+
+        add_action('init', array($this, "ezt_redirect"));
+        add_action('admin_menu',array($this,"add_option_menu"));
 		add_action('wp_enqueue_scripts', array($this,"load_all_scripts"));
 		add_shortcode('tweet_display', array($this, "print_the_tweet"));
 		add_action('widgets_init', array($this, 'eztweet_create_widget'));
         add_action('plugins_loaded', array($this, 'eztweet_text'));
+        add_action( 'eztweet_hourly_event',  array($this, 'ezpost_hourly_tweet') );
+       // add_action( 'init',  array($this, 'ezpost_hourly_tweet') );
 	}
+
+    public function ezt_activate() {
+        add_option('ezt_do_activation_redirect', true);
+    }
+
+    public function ezt_redirect() {
+        if (get_option('ezt_do_activation_redirect', false)) {
+            delete_option('ezt_do_activation_redirect');
+            register_uninstall_hook( __FILE__, array($this, 'ezt_on_uninstall' ));
+            //saving basic data
+            $args = array(
+                'oauth_access_token' => '9001202-TkRmNZokzl35kneJvB7Dsuujgkw4Ourt0rcOJvEUNc',
+                'oauth_access_token_secret' => 'HEB4JOWtfkb9SZg6Ofpg7Tj9YgNYfzaKzUmEgazH05d3A',
+                'consumer_key' => 'OlgnoKz5aIBUWz52OEsJ2wmqx',
+                'consumer_secret' => 'A2wq0A2KLXbCY5LqJi4sF0Xbg6hWf5YNJxq3nELrkQ4KL6ZB9X',
+                'number_of_tweets' => 1,
+                'basic' => 1
+            );
+            update_option('ez_tweet_inputs', $args);
+            wp_schedule_event( time(), 'hourly', 'eztweet_hourly_event' );
+        }
+    }
+
+    public function ezt_on_unistall() {
+        delete_option('ez_tweet_inputs');
+        wp_clear_scheduled_hook('eztweet_hourly_event');
+        add_action('admin_notices', function() {
+            echo "<div class=\"notice notice-success is-dismissible\">";
+            echo "<p>";
+            _e( 'Deleted!', 'eztweet' );
+            echo "</p></div>";
+        });
+    }
+
+    public function ezpost_hourly_tweet() {
+	        $inputs = $this->get_options_fromadmin();
+	       if(isset($inputs['activate_posttweets']) && $inputs['activate_posttweets'] == 1) {
+	            $post = get_posts(array(
+                    'numberposts' => 1,
+                    'post_status' => 'publish',
+                    'orderby' => 'rand',
+                    'post_type' => 'post',
+                ));
+
+	            $this->status = $post[0]->post_title . " " . get_post_permalink($post[0]->ID) . ' #WordPress #Development #eztweet';
+                $this->imageurl = get_the_post_thumbnail_url($post[0]->ID);
+                $this->postTweet();
+           }
+    }
 
 	public function admin_page(){
 		include('inc/admin_page.php');
@@ -169,4 +229,67 @@ class eztweet_plugin{
 	    $inputs = get_option( $option_name );
 	    return $inputs;
 	}
+
+    public function getMediaId($settings) {
+
+        $url = 'https://upload.twitter.com/1.1/media/upload.json';
+        $method = 'POST';
+        $twitter = new TwitterAPIExchange($settings);
+
+        $file = file_get_contents($this->imageurl);
+        $data = base64_encode($file);
+
+        $params = array(
+            'media_data' => $data
+        );
+
+        try {
+            $data = $twitter->request($url, $method, $params);
+        } catch (Exception $e) {
+            echo 'Excepción capturada: ', $e->getMessage(), "\n";
+            // hacer algo
+            return null;
+        }
+
+        // para obtener más facilmente el media_id
+        $obj = json_decode($data, true);
+
+        // media_id en formato string
+        return $obj ["media_id_string"];
+    }
+
+    /**
+     *
+     */
+    public function postTweet() {
+        if($this->status) {
+            $inputs = $this->get_options_fromadmin();
+
+
+            $url = "https://api.twitter.com/1.1/statuses/update.json";
+            $requestMethod = 'POST';
+
+            // configuracion de la cuenta
+            $settings = array(
+                'oauth_access_token' => $inputs['oauth_access_token'],
+                'oauth_access_token_secret' => $inputs['oauth_access_token_secret'],
+                'consumer_key' => $inputs['consumer_key'],
+                'consumer_secret' => $inputs['consumer_secret'],
+            );
+
+            // establecer el mensaje
+            $postfields = array('status' => $this->status);
+            // establecer el media_id
+            if ($this->imageurl)
+                $postfields['media_ids'] = $this->getMediaId($settings);
+
+            // crea la coneccion con Twitter
+            $twitter = new TwitterAPIExchange($settings);
+
+            // envia el tweet
+            $twitter->buildOauth($url, $requestMethod)
+                ->setPostfields($postfields)
+                ->performRequest();
+        }
+    }
 }

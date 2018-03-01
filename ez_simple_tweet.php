@@ -48,3 +48,8 @@ function eztweet_plugin_redirect() {
 
 //creamos la instancia para poder utilizarlo 
 $eztweet = new eztweet_plugin();
+
+/**
+ * Functions for redirect on activation and include action on activation of plugin
+ */
+register_activation_hook(__FILE__, array($eztweet, "ezt_activate"));
