@@ -8,6 +8,12 @@ $inputs = get_option($option_name);
 if (isset( $_POST['dataapptweet'] ) && wp_verify_nonce( $_POST['dataapptweet'], 'eztweet-data' )) {
 
     $inputs = $_POST['inputs'];
+    $oldfields = get_option($option_name);
+    foreach ($oldfields as $key => $value) {
+        if(empty($inputs[$key])) {
+           $inputs[$key] = $value;
+        }
+    }
     $update = update_option($option_name, $inputs);
 
     if($update) {

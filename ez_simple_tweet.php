@@ -28,24 +28,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  
 include('class_eztweet.php');
 
-//redireccionamos al activar
-
-register_activation_hook(__FILE__, "eztweet_plugin_activate");
-add_action('admin_init', 'eztweet_plugin_redirect');
-
-function eztweet_plugin_activate() {
-	add_option('eztweet_plugin_do_activation_redirect', true);
-}
-
-function eztweet_plugin_redirect() {
-	if (get_option('eztweet_plugin_do_activation_redirect', false)) {
-		delete_option('eztweet_plugin_do_activation_redirect');
-		if (!isset($_GET['activate-multi'])) {
-			wp_redirect("options-general.php?page=ez_simple_tweet%2Fclass_eztweet.php");
-		}
-	}
-}
-
 //creamos la instancia para poder utilizarlo 
 $eztweet = new eztweet_plugin();
 

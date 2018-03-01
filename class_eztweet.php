@@ -6,10 +6,6 @@ class eztweet_plugin{
     private $imageurl;
 	//en el constructor es donde llamamos a las acciones que vayamos creando
 	public function __construct() {
-        ini_set('display_errors', 1);
-        ini_set('display_startup_errors', 1);
-        error_reporting(E_ALL);
-
         require_once 'inc/TwitterAPIExchange.php';
 
         add_action('init', array($this, "ezt_redirect"));
