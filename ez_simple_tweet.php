@@ -26,7 +26,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
  
-include('class_eztweet.php');
+require_once 'class_eztweet.php';
+require_once 'inc/vendor/twitteroauth/autoload.php';
 
 //creamos la instancia para poder utilizarlo 
 $eztweet = new eztweet_plugin();

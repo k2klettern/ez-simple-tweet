@@ -1,38 +1,63 @@
 <?php
+use Abraham\TwitterOAuth\TwitterOAuth;
+
 //creamos la clase con el nombre del archivo
 class eztweet_plugin{
 
     private $status;
     private $imageurl;
+    private $credentials;
+    private $conection;
+    private $content;
 	//en el constructor es donde llamamos a las acciones que vayamos creando
 	public function __construct() {
-        require_once 'inc/TwitterAPIExchange.php';
+        //require_once 'inc/TwitterAPIExchange.php';
 
-        add_action('init', array($this, "ezt_redirect"));
-        add_action('admin_menu',array($this,"add_option_menu"));
-		add_action('wp_enqueue_scripts', array($this,"load_all_scripts"));
-		add_shortcode('tweet_display', array($this, "print_the_tweet"));
-		add_action('widgets_init', array($this, 'eztweet_create_widget'));
-        add_action('plugins_loaded', array($this, 'eztweet_text'));
-        add_action( 'eztweet_hourly_event',  array($this, 'ezpost_hourly_tweet') );
-       // add_action( 'init',  array($this, 'ezpost_hourly_tweet') );
+        $this->credentials = $this->get_options_fromadmin();
+		if(isset($this->credentials['oauth_access_token'])) {
+			$this->conection = new TwitterOAuth( $this->credentials['consumer_key'], $this->credentials['consumer_secret'], $this->credentials['oauth_access_token'], $this->credentials['oauth_access_token_secret'] );
+		} else {
+		    $this->conection = new TwitterOAuth($this->credentials['consumer_key'], $this->credentials['consumer_secret']);
+        }
+
+        if(!session_id()) session_start();
+
+        $this->initHooks();
 	}
+	
+	public function initHooks() {
+	    if(isset($this->credentials['oauth_access_token'])) {
+		    add_shortcode('tweet_display', array($this, "print_the_tweet"));
+		    add_action('widgets_init', array($this, 'eztweet_create_widget'));
+		    add_action( 'eztweet_hourly_event',  array($this, 'ezpost_hourly_tweet') );
+	    }
+		add_action('init', array($this, "ezt_redirect"));
+		add_action('admin_menu',array($this,"add_option_menu"));
+		add_action('wp_enqueue_scripts', array($this,"load_all_scripts"));
+		add_action('plugins_loaded', array($this, 'eztweet_text'));
+		// add_action( 'init',  array($this, 'ezpost_hourly_tweet') );
+		add_action('init', array($this, 'actionLoginEztweet'));
+    }
 
     public function ezt_activate() {
         add_option('ezt_do_activation_redirect', true);
     }
 
+    /**
+     * 'oauth_access_token' => '9001202-TkRmNZokzl35kneJvB7Dsuujgkw4Ourt0rcOJvEUNc',
+                'oauth_access_token_secret' => 'HEB4JOWtfkb9SZg6Ofpg7Tj9YgNYfzaKzUmEgazH05d3A',
+     */
     public function ezt_redirect() {
         if (get_option('ezt_do_activation_redirect', false)) {
             delete_option('ezt_do_activation_redirect');
-            register_uninstall_hook( __FILE__, array($this, 'ezt_on_uninstall' ));
+            register_uninstall_hook( __FILE__, array('eztweet_plugin', 'ezt_on_uninstall' ));
             //saving basic data
             $args = array(
-                'oauth_access_token' => '9001202-TkRmNZokzl35kneJvB7Dsuujgkw4Ourt0rcOJvEUNc',
-                'oauth_access_token_secret' => 'HEB4JOWtfkb9SZg6Ofpg7Tj9YgNYfzaKzUmEgazH05d3A',
-                'consumer_key' => 'OlgnoKz5aIBUWz52OEsJ2wmqx',
-                'consumer_secret' => 'A2wq0A2KLXbCY5LqJi4sF0Xbg6hWf5YNJxq3nELrkQ4KL6ZB9X',
+                'consumer_key' => 'YQLZU0KMBicXDlwtQZwepnqaC',
+                'consumer_secret' => '0K0uHmEU3hlVw59oTIzhGLeLpv6pzpqAY8arhCRphyOX8Upsz6',
                 'number_of_tweets' => 1,
+                'url_login' => home_url('?eztw=login'),
+                'url_callback' => home_url('?eztw=callback'),
                 'basic' => 1
             );
             update_option('ez_tweet_inputs', $args);
@@ -40,7 +65,7 @@ class eztweet_plugin{
         }
     }
 
-    public function ezt_on_unistall() {
+    static function ezt_on_unistall() {
         delete_option('ez_tweet_inputs');
         wp_clear_scheduled_hook('eztweet_hourly_event');
         add_action('admin_notices', function() {
@@ -68,6 +93,11 @@ class eztweet_plugin{
     }
 
 	public function admin_page(){
+        if(!isset($this->credentials['oauth_access_token'])) {
+	        echo "<a href=\"" . $this->buildTheButton() . "\">Conectar con Twitter</a>";
+        } else {
+	        echo $this->print_the_tweet();
+        }
 		include('inc/admin_page.php');
 	}
 
@@ -77,7 +107,7 @@ class eztweet_plugin{
 
 	public function eztweet_create_widget() {
 	include_once plugin_dir_path(__FILE__) . 'inc/widget.php';
-	register_widget('eztweet_widget');
+	    register_widget('eztweet_widget');
 	}
 
 	public function add_option_menu(){
@@ -89,57 +119,16 @@ class eztweet_plugin{
 	}
 
 	public function array_of_tweets(){
-			// Hacemos los request
-		    $inputs = $this->get_options_fromadmin();
-		    $url = "https://api.twitter.com/1.1/statuses/user_timeline.json";
-		    $r = $this->buildAuthorizationHeader();
-		    $header = array($r, 'Expect:');
-		if(function_exists('curl_init')) {
-		    	$options = array( CURLOPT_HTTPHEADER => $header,
-		                      //CURLOPT_POSTFIELDS => $postfields,
-		                      CURLOPT_HEADER => false,
-		                      CURLOPT_URL => $url,
-		                      CURLOPT_RETURNTRANSFER => true,
-		                      CURLOPT_SSL_VERIFYPEER => false);
+		$i = (isset($this->credentials['number_of_tweets'])) ? $this->credentials['number_of_tweets'] : 1;
+		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true]);
 
-				$feed = curl_init();
-				curl_setopt_array($feed, $options);
-				$json = curl_exec($feed);
-				curl_close($feed);
-
-				$twitter_data = json_decode($json);
-
-		//enviamos los tweets
-		$i = (isset($inputs['number_of_tweets']) && $inputs['number_of_tweets'] > 1) ? $inputs['number_of_tweets'] : 1;
-		return array_slice($twitter_data, 0, $i);
-			} else {
-				echo "You need to set up curl";
-				return false;
-			}
+		return $statuses;
 	}
 
 	public function array_of_tweets_widget($i){
-		// Hacemos los request
-		$inputs = $this->get_options_fromadmin();
-		$url = "https://api.twitter.com/1.1/statuses/user_timeline.json";
-		$r = $this->buildAuthorizationHeader();
-		$header = array($r, 'Expect:');
-		$options = array( CURLOPT_HTTPHEADER => $header,
-			//CURLOPT_POSTFIELDS => $postfields,
-			CURLOPT_HEADER => false,
-			CURLOPT_URL => $url,
-			CURLOPT_RETURNTRANSFER => true,
-			CURLOPT_SSL_VERIFYPEER => false);
+		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true]);
 
-		$feed = curl_init();
-		curl_setopt_array($feed, $options);
-		$json = curl_exec($feed);
-		curl_close($feed);
-
-		$twitter_data = json_decode($json);
-
-		//enviamos los tweets
-		return array_slice($twitter_data, 0, $i);
+		return $statuses;
 	}
 
 	public function print_the_tweet() {
@@ -177,48 +166,48 @@ class eztweet_plugin{
 		}
 	}
 
-    private function buildBaseString($baseURI, $method, $params) {
-        $r = array();
-        ksort($params);
-        foreach($params as $key=>$value){
-            $r[] = "$key=" . rawurlencode($value);
-        }
-        return $method."&" . rawurlencode($baseURI) . '&' . rawurlencode(implode('&', $r));
-    }
+//    private function buildBaseString($baseURI, $method, $params) {
+//        $r = array();
+//        ksort($params);
+//        foreach($params as $key=>$value){
+//            $r[] = "$key=" . rawurlencode($value);
+//        }
+//        return $method."&" . rawurlencode($baseURI) . '&' . rawurlencode(implode('&', $r));
+//    }
+//
+//    private function buildAuthorizationHeader() {
+//    	$oauth = $this->data_tweet();
+//        $r = 'Authorization: OAuth ';
+//        $values = array();
+//        foreach($oauth as $key=>$value)
+//            $values[] = "$key=\"" . rawurlencode($value) . "\"";
+//        $r .= implode(', ', $values);
+//        return $r;
+//    }
 
-    private function buildAuthorizationHeader() {
-    	$oauth = $this->data_tweet();
-        $r = 'Authorization: OAuth ';
-        $values = array();
-        foreach($oauth as $key=>$value)
-            $values[] = "$key=\"" . rawurlencode($value) . "\"";
-        $r .= implode(', ', $values);
-        return $r;
-    }
-
-    private function data_tweet() {
-	    $url = "https://api.twitter.com/1.1/statuses/user_timeline.json";
-	    $inputs = $this->get_options_fromadmin();
-
-	    $oauth_access_token = $inputs['oauth_access_token'];
-	    $oauth_access_token_secret = $inputs['oauth_access_token_secret'];
-	    $consumer_key = $inputs['consumer_key'];
-	    $consumer_secret = $inputs['consumer_secret'];
-
-	    $oauth = array( 'oauth_consumer_key' => $consumer_key,
-	                    'oauth_nonce' => time(),
-	                    'oauth_signature_method' => 'HMAC-SHA1',
-	                    'oauth_token' => $oauth_access_token,
-	                    'oauth_timestamp' => time(),
-	                    'oauth_version' => '1.0');
-
-	    $base_info = $this->buildBaseString($url, 'GET', $oauth);
-	    $composite_key = rawurlencode($consumer_secret) . '&' . rawurlencode($oauth_access_token_secret);
-	    $oauth_signature = base64_encode(hash_hmac('sha1', $base_info, $composite_key, true));
-	    $oauth['oauth_signature'] = $oauth_signature;
-
-	    return $oauth;
-	}
+//    private function data_tweet() {
+//	    $url = "https://api.twitter.com/1.1/statuses/user_timeline.json";
+//	    $inputs = $this->get_options_fromadmin();
+//
+//	    $oauth_access_token = $inputs['oauth_access_token'];
+//	    $oauth_access_token_secret = $inputs['oauth_access_token_secret'];
+//	    $consumer_key = $inputs['consumer_key'];
+//	    $consumer_secret = $inputs['consumer_secret'];
+//
+//	    $oauth = array( 'oauth_consumer_key' => $consumer_key,
+//	                    'oauth_nonce' => time(),
+//	                    'oauth_signature_method' => 'HMAC-SHA1',
+//	                    'oauth_token' => $oauth_access_token,
+//	                    'oauth_timestamp' => time(),
+//	                    'oauth_version' => '1.0');
+//
+//	    $base_info = $this->buildBaseString($url, 'GET', $oauth);
+//	    $composite_key = rawurlencode($consumer_secret) . '&' . rawurlencode($oauth_access_token_secret);
+//	    $oauth_signature = base64_encode(hash_hmac('sha1', $base_info, $composite_key, true));
+//	    $oauth['oauth_signature'] = $oauth_signature;
+//
+//	    return $oauth;
+//	}
 
 	private function get_options_fromadmin() {
 		$option_name = 'ez_tweet_inputs';
@@ -255,37 +244,87 @@ class eztweet_plugin{
     }
 
     /**
-     *
+     * Sends Tweets
      */
     public function postTweet() {
         if($this->status) {
-            $inputs = $this->get_options_fromadmin();
+            $parameters['status'] = $this->status;
+            if($this->imageurl) {
+	            $media1                  = $this->conection->upload( 'media/upload', [ 'media' => $this->imageurl ] );
+	            $parameters['media_ids'] = $media1->media_id_string;
+            }
+	        $this->conection->post('statuses/update', $parameters);
+        }
+    }
 
+    public function getNewToken() {
+        try {
+		    $request_token = $this->conection->oauth(
+			    'oauth/request_token', [
+				    'oauth_callback' => $this->credentials['url_callback']
+			    ]
+		    );
+	    } catch (Exception $e) {
+		    wp_die('There was a problem performing this request eztweet', $e->getMessage());
+	    }
 
-            $url = "https://api.twitter.com/1.1/statuses/update.json";
-            $requestMethod = 'POST';
+	    $_SESSION['oauth_token'] = $request_token['oauth_token'];
+	    $_SESSION['oauth_token_secret'] = $request_token['oauth_token_secret'];
 
-            // configuracion de la cuenta
-            $settings = array(
-                'oauth_access_token' => $inputs['oauth_access_token'],
-                'oauth_access_token_secret' => $inputs['oauth_access_token_secret'],
-                'consumer_key' => $inputs['consumer_key'],
-                'consumer_secret' => $inputs['consumer_secret'],
-            );
+	    $url = $this->conection->url(
+		    'oauth/authorize', [
+			    'oauth_token' => $request_token['oauth_token']
+		    ]
+	    );
 
-            // establecer el mensaje
-            $postfields = array('status' => $this->status);
-            // establecer el media_id
-            if ($this->imageurl)
-                $postfields['media_ids'] = $this->getMediaId($settings);
+	    return $url;
+    }
 
-            // crea la coneccion con Twitter
-            $twitter = new TwitterAPIExchange($settings);
+    public function buildTheButton() {
+	      $url = $this->getNewToken();
+          return $url;
+    }
 
-            // envia el tweet
-            $twitter->buildOauth($url, $requestMethod)
-                ->setPostfields($postfields)
-                ->performRequest();
+    public function actionLoginEztweet() {
+        ob_start();
+        if(isset($_REQUEST['eztw'])) {
+            if($_REQUEST['eztw'] == 'login') {
+
+            }
+            if($_REQUEST['eztw'] == 'callback') {
+	            $oauth_verifier = filter_input(INPUT_GET, 'oauth_verifier');
+
+	            if (empty($oauth_verifier) ||
+	                empty($_SESSION['oauth_token']) ||
+	                empty($_SESSION['oauth_token_secret'])
+	            ) {
+		            // something's missing, go and login again
+                    ob_start();
+		            header('Location: ' . $this->getNewToken());
+	            }
+
+	            $connection = new TwitterOAuth(
+		            $this->credentials['consumer_key'],
+		            $this->credentials['consumer_secret'],
+		            $_SESSION['oauth_token'],
+		            $_SESSION['oauth_token_secret']
+	            );
+
+	            try {
+	                $token = $connection->oauth(
+			            'oauth/access_token', [
+				            'oauth_verifier' => $oauth_verifier
+			            ]
+		            );
+	            } catch (Exception $e) {
+		            wp_die('Imposibel to get the tokens eztweet', $e->getMessage());
+                }
+
+	            $this->credentials['oauth_access_token'] = $token['oauth_token'];
+	            $this->credentials['oauth_access_token_secret'] = $token['oauth_token_secret'];
+
+	            update_option('ez_tweet_inputs', $this->credentials);
+            }
         }
     }
 }

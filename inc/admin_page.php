@@ -66,7 +66,6 @@ if (isset( $_POST['dataapptweet'] ) && wp_verify_nonce( $_POST['dataapptweet'], 
                 <input type="submit" name="Submit" class="button-primary" value="<?php esc_attr_e('Save Changes', 'eztweet')?>" />
             </p>
         </form>
-
         <h3><?php _e('Shorcodes you may use', 'eztweet'); ?></h3>
         <p>[tweet_display] : <?php _e('Returns one simple last tweet you may enter whatever you want to show', 'eztweet'); ?></p>
         <p>class eztweet_plugin->array_of_tweets <?php _e('will return an array of the last number of tweets you have set', 'eztweet'); ?></p>
