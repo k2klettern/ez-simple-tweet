@@ -11,7 +11,6 @@ class eztweet_plugin{
     private $content;
 	//en el constructor es donde llamamos a las acciones que vayamos creando
 	public function __construct() {
-        //require_once 'inc/TwitterAPIExchange.php';
 
         $this->credentials = $this->get_options_fromadmin();
 		if(isset($this->credentials['oauth_access_token'])) {
@@ -35,7 +34,6 @@ class eztweet_plugin{
 		add_action('admin_menu',array($this,"add_option_menu"));
 		add_action('wp_enqueue_scripts', array($this,"load_all_scripts"));
 		add_action('plugins_loaded', array($this, 'eztweet_text'));
-		// add_action( 'init',  array($this, 'ezpost_hourly_tweet') );
 		add_action('init', array($this, 'actionLoginEztweet'));
 		add_action('admin_init', array($this, 'ezTweetNow'));
     }
@@ -58,8 +56,12 @@ class eztweet_plugin{
                 'url_callback' => home_url('?eztw=callback'),
                 'basic' => 1
             );
-            update_option('ez_tweet_inputs', $args);
-            wp_schedule_event( time(), 'hourly', 'eztweet_hourly_event' );
+            if(!get_option('ez_tweet_inputs')) {
+	            update_option( 'ez_tweet_inputs', $args );
+            }
+            if(!wp_get_schedule('eztweet_hourly_event')) {
+	            wp_schedule_event( time(), 'hourly', 'eztweet_hourly_event' );
+            }
         }
     }
 
