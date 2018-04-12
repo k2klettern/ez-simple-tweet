@@ -130,30 +130,61 @@ class eztweet_plugin{
 
 	public function array_of_tweets(){
 		$i = (isset($this->credentials['number_of_tweets'])) ? $this->credentials['number_of_tweets'] : 1;
-		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true]);
+		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true, "include_entities" => true, 'tweet_mode'=>'extended', "result_type" => "mixed"]);
 
 		return $statuses;
 	}
 
 	public function array_of_tweets_widget($i){
-		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true]);
+		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true, "include_entities" => true, 'tweet_mode'=>'extended', "result_type" => "mixed"]);
 
 		return $statuses;
 	}
 
-	public function print_the_tweet() {
+	public function print_the_tweet($atts) {
 		ob_start();
-		$tweets = $this->array_of_tweets(); ?>
-		<div class="tweetcontent oval-thought-border">
-				<div class="tweet-text">
-					<span class="dashicons dashicons-twitter tweet-dash"></span>
-				 <?php
-				 	if($tweets && is_array($tweets)) {
-				 		echo "<a href=\"".$tweets[0]->entities->urls[0]->url."\" target=\"_blank\">".$tweets[0]->text."</a><br />";
-						echo "<a href=\"http://twitter.com/".$tweets[0]->user->screen_name."\" target=\"_blank\">@".$tweets[0]->user->screen_name."</a><br />";
-					} ?>
-				</div>
-		</div><?php
+		extract(shortcode_atts(
+				array(
+					'number' => '1',
+                    'showimg' => false
+				), $atts)
+		);
+		$tweets = $this->array_of_tweets_widget($number); ?>
+        <div class="tweetcontent">
+        <?php for($i=1;$i<=$number;$i++) { ?>
+            <div class="tweet-text">
+                <span class="dashicons dashicons-twitter tweet-dash "></span>
+		        <?php
+		        if ( $tweets && is_array( $tweets ) ) {
+                    if(isset($tweets[$i - 1]->retweeted_status)) {
+	                    echo "<a href=\"" . $tweets[ $i - 1 ]->retweeted_status->entities->media[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+	                    echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+	                    if (isset($tweets[$i - 1]->retweeted_status->entities->media)) {
+		                    echo "<ul>";
+		                    foreach ($tweets[$i - 1]->retweeted_status->entities->media as $media) {
+			                    echo "<li><img src='" . $media->media_url_https ."'></li>";
+		                    }
+		                    echo "</ul>";
+	                    }
+                    } else {
+	                    echo "<a href=\"" . $tweets[ $i - 1 ]->entities->urls[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+	                    echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+	                    if (isset($tweets[$i - 1]->entities->media)) {
+		                    echo "<ul>";
+		                    foreach ($tweets[$i - 1]->entities->media as $media) {
+			                    echo "<li><img src='" . $media->media_url_https ."'></li>";
+		                    }
+		                    echo "</ul>";
+	                    }
+                    }
+
+
+
+		        } ?>
+            </div><?php
+        } ?>
+        </div>
+        <?php
 		$output_string=ob_get_contents();
 		ob_end_clean();
 
@@ -163,16 +194,40 @@ class eztweet_plugin{
 	public function print_the_tweets_forwidget($times) {
 		$tweets = $this->array_of_tweets_widget($times);
 		for($i=1;$i<=$times;$i++) { ?>
-			<div class="tweetcontent">
-			<div class="tweet-text">
-				<span class="dashicons dashicons-twitter tweet-dash "></span>
+            <div class="tweetcontent">
+			<?php for($i=1;$i<=$times;$i++) { ?>
+                <div class="tweet-text">
+                <span class="dashicons dashicons-twitter tweet-dash "></span>
 				<?php
-			if($tweets && is_array($tweets)) {
-				echo "<a href=\"" . $tweets[$i - 1]->entities->urls[0]->url . "\" target=\"_blank\">" . $tweets[$i - 1]->text . "</a><br />";
-				echo "<a href=\"http://twitter.com/" . $tweets[$i - 1]->user->screen_name . "\" target=\"_blank\">@" . $tweets[$i - 1]->user->screen_name . "</a><br />";
+				if ( $tweets && is_array( $tweets ) ) {
+					if(isset($tweets[$i - 1]->retweeted_status)) {
+						echo "<a href=\"" . $tweets[ $i - 1 ]->retweeted_status->entities->media[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+						echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+						if (isset($tweets[$i - 1]->retweeted_status->entities->media)) {
+							echo "<ul>";
+							foreach ($tweets[$i - 1]->retweeted_status->entities->media as $media) {
+								echo "<li><img src='" . $media->media_url_https ."'></li>";
+							}
+							echo "</ul>";
+						}
+					} else {
+						echo "<a href=\"" . $tweets[ $i - 1 ]->entities->urls[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+						echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+						if (isset($tweets[$i - 1]->entities->media)) {
+							echo "<ul>";
+							foreach ($tweets[$i - 1]->entities->media as $media) {
+								echo "<li><img src='" . $media->media_url_https ."'></li>";
+							}
+							echo "</ul>";
+						}
+					}
+
+
+
+				} ?>
+                </div><?php
 			} ?>
-			</div>
-			</div><?php
+            </div><?php
 		}
 	}
 
