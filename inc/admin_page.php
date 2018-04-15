@@ -7,13 +7,18 @@ $inputs = get_option($option_name);
 
 if (isset( $_POST['dataapptweet'] ) && wp_verify_nonce( $_POST['dataapptweet'], 'eztweet-data' )) {
 
+	$oldfields = $inputs;
     $inputs = $_POST['inputs'];
-    $oldfields = get_option($option_name);
+
     foreach ($oldfields as $key => $value) {
-        if(empty($inputs[$key])) {
+        if($key != 'activate_posttweets' && empty($inputs[$key])) {
            $inputs[$key] = $value;
         }
     }
+    if(empty($inputs['activate_posttweets'])) {
+	    $inputs['activate_posttweets'] = "0";
+	}
+
     $update = update_option($option_name, $inputs);
 
     if($update) {
@@ -74,7 +79,11 @@ if (isset( $_POST['dataapptweet'] ) && wp_verify_nonce( $_POST['dataapptweet'], 
     <hr><br>
         <form action="" method="post">
             <input type="hidden" name="tnow" value ="tnow">
-            <input type="submit" value="<?php _e('Tweet Now', 'eztweet'); ?>"
+            <input type="submit" class="button-primary" value="<?php _e('Tweet Now', 'eztweet'); ?>">
         </form>
-
+    <hr><br>
+    <?php echo '<pre>'; print_r( _get_cron_array() ); echo '</pre>';
+   // wp_clear_scheduled_hook( 'eztweet_hourly_event' );
+    //wp_schedule_event( time(), 'hourly', 'eztweet_hourly_event' );
+    ?>
 </div>

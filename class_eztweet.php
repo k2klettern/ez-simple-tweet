@@ -1,4 +1,5 @@
 <?php
+
 use Abraham\TwitterOAuth\TwitterOAuth;
 
 //creamos la clase con el nombre del archivo
@@ -11,7 +12,6 @@ class eztweet_plugin{
     private $content;
 	//en el constructor es donde llamamos a las acciones que vayamos creando
 	public function __construct() {
-        //require_once 'inc/TwitterAPIExchange.php';
 
         $this->credentials = $this->get_options_fromadmin();
 		if(isset($this->credentials['oauth_access_token'])) {
@@ -35,9 +35,8 @@ class eztweet_plugin{
 		add_action('admin_menu',array($this,"add_option_menu"));
 		add_action('wp_enqueue_scripts', array($this,"load_all_scripts"));
 		add_action('plugins_loaded', array($this, 'eztweet_text'));
-		// add_action( 'init',  array($this, 'ezpost_hourly_tweet') );
 		add_action('init', array($this, 'actionLoginEztweet'));
-		add_action('template_redirect', array($this, 'ezTweetNow'));
+		add_action('admin_init', array($this, 'ezTweetNow'));
     }
 
     public function ezt_activate() {
@@ -58,8 +57,12 @@ class eztweet_plugin{
                 'url_callback' => home_url('?eztw=callback'),
                 'basic' => 1
             );
-            update_option('ez_tweet_inputs', $args);
-            wp_schedule_event( time(), 'hourly', 'eztweet_hourly_event' );
+            if(!get_option('ez_tweet_inputs')) {
+	            update_option( 'ez_tweet_inputs', $args );
+            }
+            if(!wp_get_schedule('eztweet_hourly_event')) {
+	            wp_schedule_event( time(), 'hourly', 'eztweet_hourly_event' );
+            }
         }
     }
 
@@ -90,8 +93,13 @@ class eztweet_plugin{
                 ));
 
 	            $this->status = $post[0]->post_title . " " . get_post_permalink($post[0]->ID) . ' #WordPress #Development #eztweet';
-                $this->imageurl = get_the_post_thumbnail_url($post[0]->ID);
+		        $post_thumbnail_id = get_post_thumbnail_id( $post[0]->ID );
+	            $metadata = wp_get_attachment_metadata( $post_thumbnail_id );
+	            $upload_dir = wp_get_upload_dir();
+	            $this->imageurl = $upload_dir['basedir'] . "/" . $metadata['file'];
                 $this->postTweet();
+           } else {
+	           wp_die(__('You have to activate post tweets in order to be availabel to send tweets', 'eztweet'), "", array('back_link' => true));
            }
     }
 
@@ -123,30 +131,61 @@ class eztweet_plugin{
 
 	public function array_of_tweets(){
 		$i = (isset($this->credentials['number_of_tweets'])) ? $this->credentials['number_of_tweets'] : 1;
-		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true]);
+		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true, "include_entities" => true, 'tweet_mode'=>'extended', "result_type" => "mixed"]);
 
 		return $statuses;
 	}
 
 	public function array_of_tweets_widget($i){
-		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true]);
+		$statuses = $this->conection->get("statuses/user_timeline", ["count" => $i, "exclude_replies" => true, "include_entities" => true, 'tweet_mode'=>'extended', "result_type" => "mixed"]);
 
 		return $statuses;
 	}
 
-	public function print_the_tweet() {
+	public function print_the_tweet($atts) {
 		ob_start();
-		$tweets = $this->array_of_tweets(); ?>
-		<div class="tweetcontent oval-thought-border">
-				<div class="tweet-text">
-					<span class="dashicons dashicons-twitter tweet-dash"></span>
-				 <?php
-				 	if($tweets && is_array($tweets)) {
-				 		echo "<a href=\"".$tweets[0]->entities->urls[0]->url."\" target=\"_blank\">".$tweets[0]->text."</a><br />";
-						echo "<a href=\"http://twitter.com/".$tweets[0]->user->screen_name."\" target=\"_blank\">@".$tweets[0]->user->screen_name."</a><br />";
-					} ?>
-				</div>
-		</div><?php
+		extract(shortcode_atts(
+				array(
+					'number' => '1',
+                    'showimg' => false
+				), $atts)
+		);
+		$tweets = $this->array_of_tweets_widget($number); ?>
+        <div class="tweetcontent">
+        <?php for($i=1;$i<=$number;$i++) { ?>
+            <div class="tweet-text">
+                <span class="dashicons dashicons-twitter tweet-dash "></span>
+		        <?php
+		        if ( $tweets && is_array( $tweets ) ) {
+                    if(isset($tweets[$i - 1]->retweeted_status)) {
+	                    echo "<a href=\"" . $tweets[ $i - 1 ]->retweeted_status->entities->media[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+	                    echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+	                    if (isset($tweets[$i - 1]->retweeted_status->entities->media)) {
+		                    echo "<ul>";
+		                    foreach ($tweets[$i - 1]->retweeted_status->entities->media as $media) {
+			                    echo "<li><img src='" . $media->media_url_https ."'></li>";
+		                    }
+		                    echo "</ul>";
+	                    }
+                    } else {
+	                    echo "<a href=\"" . $tweets[ $i - 1 ]->entities->urls[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+	                    echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+	                    if (isset($tweets[$i - 1]->entities->media)) {
+		                    echo "<ul>";
+		                    foreach ($tweets[$i - 1]->entities->media as $media) {
+			                    echo "<li><img src='" . $media->media_url_https ."'></li>";
+		                    }
+		                    echo "</ul>";
+	                    }
+                    }
+
+
+
+		        } ?>
+            </div><?php
+        } ?>
+        </div>
+        <?php
 		$output_string=ob_get_contents();
 		ob_end_clean();
 
@@ -156,16 +195,40 @@ class eztweet_plugin{
 	public function print_the_tweets_forwidget($times) {
 		$tweets = $this->array_of_tweets_widget($times);
 		for($i=1;$i<=$times;$i++) { ?>
-			<div class="tweetcontent">
-			<div class="tweet-text">
-				<span class="dashicons dashicons-twitter tweet-dash "></span>
+            <div class="tweetcontent">
+			<?php for($i=1;$i<=$times;$i++) { ?>
+                <div class="tweet-text">
+                <span class="dashicons dashicons-twitter tweet-dash "></span>
 				<?php
-			if($tweets && is_array($tweets)) {
-				echo "<a href=\"" . $tweets[$i - 1]->entities->urls[0]->url . "\" target=\"_blank\">" . $tweets[$i - 1]->text . "</a><br />";
-				echo "<a href=\"http://twitter.com/" . $tweets[$i - 1]->user->screen_name . "\" target=\"_blank\">@" . $tweets[$i - 1]->user->screen_name . "</a><br />";
+				if ( $tweets && is_array( $tweets ) ) {
+					if(isset($tweets[$i - 1]->retweeted_status)) {
+						echo "<a href=\"" . $tweets[ $i - 1 ]->retweeted_status->entities->media[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+						echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+						if (isset($tweets[$i - 1]->retweeted_status->entities->media)) {
+							echo "<ul>";
+							foreach ($tweets[$i - 1]->retweeted_status->entities->media as $media) {
+								echo "<li><img src='" . $media->media_url_https ."'></li>";
+							}
+							echo "</ul>";
+						}
+					} else {
+						echo "<a href=\"" . $tweets[ $i - 1 ]->entities->urls[0]->url . "\" target=\"_blank\">" . $tweets[ $i - 1 ]->full_text . "</a><br />";
+						echo "<a href=\"http://twitter.com/" . $tweets[ $i - 1 ]->user->screen_name . "\" target=\"_blank\">@" . $tweets[ $i - 1 ]->user->screen_name . "</a><br />";
+						if (isset($tweets[$i - 1]->entities->media)) {
+							echo "<ul>";
+							foreach ($tweets[$i - 1]->entities->media as $media) {
+								echo "<li><img src='" . $media->media_url_https ."'></li>";
+							}
+							echo "</ul>";
+						}
+					}
+
+
+
+				} ?>
+                </div><?php
 			} ?>
-			</div>
-			</div><?php
+            </div><?php
 		}
 	}
 
@@ -213,6 +276,9 @@ class eztweet_plugin{
             if($this->imageurl) {
 	            $media1                  = $this->conection->upload( 'media/upload', [ 'media' => $this->imageurl ] );
 	            $parameters['media_ids'] = $media1->media_id_string;
+	            add_action('wp_after_admin_bar_render', function() {
+		            printf( '<div class="%1$s"><p>%2$s</p></div>', "notice notice-success", __('tweet sent', 'eztweet'));
+	            });
             }
             try {
 	            $this->conection->post( 'statuses/update', $parameters );
