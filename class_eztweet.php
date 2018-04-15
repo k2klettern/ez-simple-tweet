@@ -37,16 +37,14 @@ class eztweet_plugin{
 		add_action('plugins_loaded', array($this, 'eztweet_text'));
 		// add_action( 'init',  array($this, 'ezpost_hourly_tweet') );
 		add_action('init', array($this, 'actionLoginEztweet'));
+		add_action('template_redirect', array($this, 'ezTweetNow'));
     }
 
     public function ezt_activate() {
         add_option('ezt_do_activation_redirect', true);
     }
 
-    /**
-     * 'oauth_access_token' => '9001202-TkRmNZokzl35kneJvB7Dsuujgkw4Ourt0rcOJvEUNc',
-                'oauth_access_token_secret' => 'HEB4JOWtfkb9SZg6Ofpg7Tj9YgNYfzaKzUmEgazH05d3A',
-     */
+    
     public function ezt_redirect() {
         if (get_option('ezt_do_activation_redirect', false)) {
             delete_option('ezt_do_activation_redirect');
@@ -76,8 +74,13 @@ class eztweet_plugin{
         });
     }
 
+    public function ezTweetNow() {
+	    if(isset($_POST['tnow']) && $_POST['tnow'] == 'tnow') {
+	        $this->ezpost_hourly_tweet();
+        }
+    }
     public function ezpost_hourly_tweet() {
-	        $inputs = $this->get_options_fromadmin();
+	       $inputs = $this->get_options_fromadmin();
 	       if(isset($inputs['activate_posttweets']) && $inputs['activate_posttweets'] == 1) {
 	            $post = get_posts(array(
                     'numberposts' => 1,
@@ -166,48 +169,6 @@ class eztweet_plugin{
 		}
 	}
 
-//    private function buildBaseString($baseURI, $method, $params) {
-//        $r = array();
-//        ksort($params);
-//        foreach($params as $key=>$value){
-//            $r[] = "$key=" . rawurlencode($value);
-//        }
-//        return $method."&" . rawurlencode($baseURI) . '&' . rawurlencode(implode('&', $r));
-//    }
-//
-//    private function buildAuthorizationHeader() {
-//    	$oauth = $this->data_tweet();
-//        $r = 'Authorization: OAuth ';
-//        $values = array();
-//        foreach($oauth as $key=>$value)
-//            $values[] = "$key=\"" . rawurlencode($value) . "\"";
-//        $r .= implode(', ', $values);
-//        return $r;
-//    }
-
-//    private function data_tweet() {
-//	    $url = "https://api.twitter.com/1.1/statuses/user_timeline.json";
-//	    $inputs = $this->get_options_fromadmin();
-//
-//	    $oauth_access_token = $inputs['oauth_access_token'];
-//	    $oauth_access_token_secret = $inputs['oauth_access_token_secret'];
-//	    $consumer_key = $inputs['consumer_key'];
-//	    $consumer_secret = $inputs['consumer_secret'];
-//
-//	    $oauth = array( 'oauth_consumer_key' => $consumer_key,
-//	                    'oauth_nonce' => time(),
-//	                    'oauth_signature_method' => 'HMAC-SHA1',
-//	                    'oauth_token' => $oauth_access_token,
-//	                    'oauth_timestamp' => time(),
-//	                    'oauth_version' => '1.0');
-//
-//	    $base_info = $this->buildBaseString($url, 'GET', $oauth);
-//	    $composite_key = rawurlencode($consumer_secret) . '&' . rawurlencode($oauth_access_token_secret);
-//	    $oauth_signature = base64_encode(hash_hmac('sha1', $base_info, $composite_key, true));
-//	    $oauth['oauth_signature'] = $oauth_signature;
-//
-//	    return $oauth;
-//	}
 
 	private function get_options_fromadmin() {
 		$option_name = 'ez_tweet_inputs';
@@ -253,7 +214,11 @@ class eztweet_plugin{
 	            $media1                  = $this->conection->upload( 'media/upload', [ 'media' => $this->imageurl ] );
 	            $parameters['media_ids'] = $media1->media_id_string;
             }
-	        $this->conection->post('statuses/update', $parameters);
+            try {
+	            $this->conection->post( 'statuses/update', $parameters );
+            } catch (Exception $e) {
+	            wp_die('There was a problem performing this request post tweet eztweet', $e->getMessage());
+            }
         }
     }
 
